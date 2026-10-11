@@ -1,0 +1,109 @@
+---
+- name: Install and configure Keepalived on HAProxy 1
+  hosts: haproxy-1
+  become: true
+
+  vars_files:
+    - /etc/ansible/haproxy.yml
+
+  tasks:
+    - name: Install keepalived
+      apt:
+        name: keepalived
+        state: present
+        update_cache: true
+
+    - name: Create keepalived config
+      copy:
+        dest: /etc/keepalived/keepalived.conf
+        mode: "0644"
+        content: |
+          vrrp_instance VI_1 {
+              state MASTER
+              interface eth0
+              virtual_router_id 60
+              priority 100
+              advert_int 1
+
+              unicast_src_ip {{ haproxy1_ip }}
+              unicast_peer {
+                  {{ haproxy2_ip }}
+              }
+
+              authentication {
+                  auth_type PASS
+                  auth_pass 1234
+              }
+
+              virtual_ipaddress {
+                  10.0.1.19/24
+              }
+          }
+      notify: Restart keepalived
+
+    - name: Enable and start keepalived
+      systemd:
+        name: keepalived
+        enabled: true
+        state: started
+
+  handlers:
+    - name: Restart keepalived
+      systemd:
+        name: keepalived
+        state: restarted
+
+
+- name: Install and configure Keepalived on HAProxy 2
+  hosts: haproxy-2
+  become: true
+
+  vars_files:
+    - /etc/ansible/haproxy.yml
+
+  tasks:
+    - name: Install keepalived
+      apt:
+        name: keepalived
+        state: present
+        update_cache: true
+
+    - name: Create keepalived config
+      copy:
+        dest: /etc/keepalived/keepalived.conf
+        mode: "0644"
+        content: |
+          vrrp_instance VI_1 {
+              state BACKUP
+              interface eth0
+              virtual_router_id 60
+              priority 90
+              advert_int 1
+
+              unicast_src_ip {{ haproxy2_ip }}
+              unicast_peer {
+                  {{ haproxy1_ip }}
+              }
+
+              authentication {
+                  auth_type PASS
+                  auth_pass 1234
+              }
+
+              virtual_ipaddress {
+                  10.0.1.19/24
+              }
+          }
+      notify: Restart keepalived
+
+    - name: Enable and start keepalived
+      systemd:
+        name: keepalived
+        enabled: true
+        state: started
+
+  handlers:
+    - name: Restart keepalived
+      systemd:
+        name: keepalived
+        state: restarted

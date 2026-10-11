@@ -1,0 +1,54 @@
+---
+- name: Initialize Kubernetes Control Plane on master1
+  hosts: master1
+  become: true
+  vars_files:
+    - /etc/ansible/haproxy.yml
+
+  vars:
+    pod_network_cidr: "192.168.0.0/16"
+    kubeconfig_path: "/etc/kubernetes/admin.conf"
+    join_output_file: "/var/tmp/kubeadm-init-output.txt"
+    user_home: "/home/ubuntu"
+    kube_dir: "{{ user_home }}/.kube"
+
+  tasks:
+    - name: Check if Kubernetes is already initialized
+      stat:
+        path: "{{ kubeconfig_path }}"
+      register: kubeconfig_exists
+
+    - name: Initialize Kubernetes cluster
+      command: >
+        kubeadm init
+        --control-plane-endpoint={{ haproxy1_ip }}:6443
+        --pod-network-cidr={{ pod_network_cidr }}
+        --cri-socket=unix:///var/run/containerd/containerd.sock
+        --upload-certs
+        --ignore-preflight-errors=swap
+      register: kubeadm_init_output
+      when: not kubeconfig_exists.stat.exists
+
+    - name: Use local action to save kubeadm init output for join command extraction
+      local_action: copy content="{{ kubeadm_init_output.stdout }}" dest="{{ join_output_file }}" mode=0777
+      when: kubeadm_init_output is defined and kubeadm_init_output.stdout is defined
+
+    - name: Create .kube directory
+      file:
+        path: "{{ kube_dir }}"
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: "0755"
+
+    - name: Copy kubeconfig file
+      copy:
+        src: "{{ kubeconfig_path }}"
+        dest: "{{ kube_dir }}/config"
+        remote_src: true
+        owner: ubuntu
+        group: ubuntu
+        mode: "0600"
+
+    - name: Save the kubernetes config file on the ansible server
+      fetch: src=/home/ubuntu/.kube/config dest=/home/ubuntu/ flat=yes
