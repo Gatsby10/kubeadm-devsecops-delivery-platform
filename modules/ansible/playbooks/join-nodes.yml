@@ -1,0 +1,24 @@
+---
+- name: Join worker to Kubernetes cluster
+  hosts: workers
+  become: true
+  gather_facts: true
+
+  tasks:
+
+    - name: Extract the worker join command from the output
+      local_action: shell sed -n 93,94p /var/tmp/kubeadm-init-output.txt > /tmp/workertoken
+
+    - name: Move the file into the worker and change the permission of the mastertoken file to make it executable
+      copy:
+        src: /tmp/workertoken
+        dest: /tmp/worker-join-file
+        owner: root
+        group: root
+        mode: '0777'
+
+    - name: Insert the CRI socket in the join command
+      shell: sed -i '$ s/$/\ --cri-socket\ unix:\/\/\/var\/run\/containerd\/containerd.sock/g' /tmp/worker-join-file
+
+    - name: Execute the playbook to add worker to the cluster
+      command: sh /tmp/worker-join-file

@@ -1,0 +1,40 @@
+---
+- name: Install Helm and Deploy Prometheus with NodePort
+  hosts: haproxy-1
+  become: true
+  tasks:
+    - name: Download Helm install script
+      get_url:
+        url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+        dest: /tmp/get_helm.sh
+        mode: '0755'
+    - name: Install Helm
+      command: /tmp/get_helm.sh
+      args:
+        creates: /usr/local/bin/helm  # prevents reinstall
+      become_user: ubuntu
+    - name: Add Helm repo for Prometheus
+      become_user: ubuntu
+      command: helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+      args:
+        creates: /home/ubuntu/.cache/helm/repository/prometheus-community-index.yaml
+    - name: Update Helm repositories
+      become_user: ubuntu
+      command: helm repo update
+    - name: Create Kubernetes namespace for Prometheus
+      become_user: ubuntu
+      command: kubectl create namespace kube-prometheus-stack
+      ignore_errors: true
+    - name: Install Prometheus and Grafana with NodePort
+      become_user: ubuntu
+      command: >
+        helm install kube-prometheus-stack
+        --create-namespace
+        --namespace kube-prometheus-stack
+        prometheus-community/kube-prometheus-stack
+        --set prometheus.service.type=NodePort
+        --set prometheus.service.nodePort=31090
+        --set grafana.service.type=NodePort
+        --set grafana.service.nodePort=31300
+        --set alertmanager.service.type=NodePort
+        --set alertmanager.service.nodePort=31400

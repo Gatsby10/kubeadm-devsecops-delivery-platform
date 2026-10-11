@@ -1,0 +1,108 @@
+---
+- name: Install and Configure kubectl on HAProxy Nodes
+  hosts: haproxy-1
+  become: true
+
+  tasks:
+
+    - name: Ensure snapd is installed
+      apt:
+        name: snapd
+        state: present
+        update_cache: yes
+
+    - name: Copy the kubernetes config from ansible
+      copy: src=/home/ubuntu/config dest=/home/ubuntu
+
+    - name: Grant the ubuntu user the permission to run kubectl commands
+      shell: |
+        sudo su -c 'mkdir -p $HOME/.kube' ubuntu
+        sudo su -c 'sudo cp -f /home/ubuntu/config $HOME/.kube/config' ubuntu
+        sudo su -c 'sudo chown $(id -u):$(id -g) $HOME/.kube/config' ubuntu
+
+    - name: Wait for snapd to finish seeding before installing snaps
+      command: snap wait system seed.loaded
+      changed_when: false
+
+    - name: Install kubectl via snap
+      snap:
+        name: kubectl
+        classic: yes
+        state: present
+
+    - name: Symlink kubectl onto PATH for non-login shells (snap/bin is login-shell only)
+      file:
+        src: /snap/bin/kubectl
+        dest: /usr/local/bin/kubectl
+        state: link
+        force: yes
+
+    - name: Set KUBECONFIG environment variable for ubuntu user
+      lineinfile:
+        path: /home/ubuntu/.bashrc
+        line: 'export KUBECONFIG=/home/ubuntu/.kube/config'
+        create: yes
+
+    - name: Verify kubectl access to cluster
+      become_user: ubuntu
+      command: kubectl get nodes
+      register: kubectl_output
+      changed_when: false
+
+    - name: Install Weave Net Pod Network
+      become_user: ubuntu
+      command: >
+        kubectl apply -f https://github.com/weaveworks/weave/releases/download/v2.8.1/weave-daemonset-k8s.yaml
+      args:
+        executable: /bin/bash
+      register: weave_output
+
+- name: Install and Configure kubectl on HAProxy Nodes
+  hosts: haproxy-2
+  become: true
+
+  tasks:
+
+    - name: Ensure snapd is installed
+      apt:
+        name: snapd
+        state: present
+        update_cache: yes
+
+    - name: Copy the kubernetes config from ansible
+      copy: src=/home/ubuntu/config dest=/home/ubuntu
+
+    - name: Grant the ubuntu user the permission to run kubectl commands
+      shell: |
+        sudo su -c 'mkdir -p $HOME/.kube' ubuntu
+        sudo su -c 'sudo cp -f /home/ubuntu/config $HOME/.kube/config' ubuntu
+        sudo su -c 'sudo chown $(id -u):$(id -g) $HOME/.kube/config' ubuntu
+
+    - name: Wait for snapd to finish seeding before installing snaps
+      command: snap wait system seed.loaded
+      changed_when: false
+
+    - name: Install kubectl via snap
+      snap:
+        name: kubectl
+        classic: yes
+        state: present
+
+    - name: Symlink kubectl onto PATH for non-login shells (snap/bin is login-shell only)
+      file:
+        src: /snap/bin/kubectl
+        dest: /usr/local/bin/kubectl
+        state: link
+        force: yes
+
+    - name: Set KUBECONFIG environment variable for ubuntu user
+      lineinfile:
+        path: /home/ubuntu/.bashrc
+        line: 'export KUBECONFIG=/home/ubuntu/.kube/config'
+        create: yes
+
+    - name: Verify kubectl access to cluster
+      become_user: ubuntu
+      command: kubectl get nodes
+      register: kubectl_output
+      changed_when: false

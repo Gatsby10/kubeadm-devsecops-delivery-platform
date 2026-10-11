@@ -1,0 +1,27 @@
+---
+- name: Destroy Staging Environment
+  hosts: haproxy-1
+  become: true
+
+  vars:
+    app_repo_url: "https://github.com/CloudHight/Sock-Shop-App-Repo.git"
+    app_repo_path: "/home/ubuntu/Sock-Shop-App-Repo"
+    deploy_path: "/home/ubuntu/Sock-Shop-App-Repo/"
+    kubeconfig_path: "/home/ubuntu/.kube/config"
+
+  tasks:
+
+    - name: Delete previous staging deployment (safe delete)
+      command: kubectl delete -f complete.yaml -n stage 
+      args:
+        chdir: "{{ deploy_path }}"
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
+
+    - name: Ensure stage namespace is destroyed (idempotent)
+      shell: kubectl delete namespace stage
+      args:
+        chdir: "{{ deploy_path }}"
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
+      ignore_errors: true

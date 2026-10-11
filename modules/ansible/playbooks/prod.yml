@@ -1,0 +1,42 @@
+---
+- name: Deploy Microservices Application to Production Environment
+  hosts: haproxy-1
+  become: true
+
+  vars:
+    app_repo_url: "https://github.com/gwaghmare8/Sock-Shop-App-Repo.git"
+    app_repo_path: "/home/ubuntu/Sock-Shop-App-Repo"
+    deploy_path: "/home/ubuntu/Sock-Shop-App-Repo/"
+    kubeconfig_path: "/home/ubuntu/.kube/config"
+
+  tasks:
+
+    - name: Ensure application repository is present and on main branch
+      git:
+        repo: "{{ app_repo_url }}"
+        dest: "{{ app_repo_path }}"
+        version: main
+        force: yes
+        update: yes
+
+    - name: Ensure prod namespace exists (idempotent)
+      shell: kubectl create namespace prod --dry-run=client -o yaml | kubectl apply -f -
+      args:
+        chdir: "{{ deploy_path }}"
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
+      ignore_errors: true
+
+    - name: Delete previous prod deployment (safe delete)
+      command: kubectl delete -f complete.yaml -n prod --ignore-not-found=true
+      args:
+        chdir: "{{ deploy_path }}"
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
+
+    - name: Apply new prod deployment to prod namespace
+      command: kubectl apply -f complete.yaml -n prod
+      args:
+        chdir: "{{ deploy_path }}"
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
